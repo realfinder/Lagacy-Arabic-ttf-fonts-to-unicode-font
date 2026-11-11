@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>تحديث خطوط TTF العربية القديمة إلى يونيكود</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f7f6f2;--card:#fff;--tx:#1d1d1b;--mut:#6b6a63;--bd:#d9d7cf;--ac:#0f6e56;--acx:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#171716;--card:#232321;--tx:#ecebe6;--mut:#a09f96;--bd:#3a3a37;--ac:#3cc19b;--acx:#10261f}}
+:root[data-theme="dark"]{--bg:#171716;--card:#232321;--tx:#ecebe6;--mut:#a09f96;--bd:#3a3a37;--ac:#3cc19b;--acx:#10261f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Segoe UI",Tahoma,sans-serif;line-height:1.6}
+main{max-width:820px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.35rem;margin:0 0 4px}.sub,.info{color:var(--mut);font-size:.9rem}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+label{display:block;margin:8px 0 3px;font-size:.9rem}
+input[type=file],select,textarea{width:100%;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);padding:8px;font:inherit}
+.chk{display:flex;gap:8px;align-items:center}.chk input{width:auto}
+button{background:var(--ac);color:var(--acx);border:0;border-radius:8px;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;margin-top:10px}
+#vars{display:grid;gap:8px;margin-top:12px}.v{border:1px solid var(--bd);border-radius:10px;padding:10px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.v b{display:block}.v span{font-size:.85rem;color:var(--mut)}.v button{margin:0}
+#log{white-space:pre-wrap;font-size:.85rem;margin-top:10px;direction:rtl}
+#test{font-size:32px;min-height:100px}
+</style>
+</head>
+<body>
+<main>
+<h1>تحديث خطوط TTF العربية القديمة</h1>
+<p class="sub">يحوّل خط Simplified/Traditional Arabic القديم (رموز PUA) إلى خط يونيكود دون تغيير اسمه أو صيغته (يبقى TTF). المعالجة داخل متصفحك.</p>
+<div class="card">
+<label>الخط القديم (TTF)</label>
+<input type="file" id="ff" accept=".ttf,.otf">
+<label>نوع الترميز</label>
+<select id="mode"><option value="auto">اكتشاف تلقائي</option><option value="S">Simplified Arabic (F1xx)</option><option value="T">Traditional Arabic (F2xx)</option><option value="both">الاثنان معًا</option></select>
+<button id="go">تحويل</button>
+<div id="log"></div>
+<div id="vars"></div>
+</div>
+<div class="card" id="res" hidden style="display:none">
+<p class="info">جرّب الخط بكتابة نص عربي (يستخدم النسخة الأولى):</p>
+<textarea id="test" dir="rtl">السلام عليكم ورحمة الله وبركاته، لا كلام إلا بعد السلام</textarea>
+</div>
+</main>
+<script>
+/* ===== بيانات الترميزين (مستخلصة من جداول HarfBuzz) =====
+   صيغة: PUA=رموز متتالية؛ _ فراغ؛ a+b عدة رموز يونيكود؛ رمزان سداسيان = FE00+xx */
+const MAPS={
+S:"F10C=200C 200D 200E 200F|F120=0020 0021 0022 00AB 00BB 0025 00D7 00F7 0028 0029 002A 002B 060C 002D 002E 002F 0660 0661 0662 0663 0664 0665 0666 0667 0668 0669 003A 003B+061B 2018 003D 2019 003F+061F _ 0627+8D 8E 0623+83 84 0622+81 82 0625+87 88 91+92 0628+8F+90 97+98 062A+95+96 9B+9C 062B+99+9A 9F+A0 9E 062C+9D A3+A4 A2 062D+A1 A7+A8 A6 062E+A5 062F+A9+AA 0630+AB+AC 0631+AD+AE 005B 005C 005D 002C+066B+066C 0640 0632+AF+B0 B3+B4 0633+B1+B2 B7+B8 0634+B5+B6 BB+BC 0635+B9+BA BF+C0 0636+BD+BE 0637+C1+C2+C3+C4 0638+C5+C6+C7+C8 CB CC CA 0639+C9 CF D0 CE 063A+CD D3 D4 0641+D1+D2 D7 D8 0642+D5+D6 DB+DC 0643+D9+DA DF+E0 0644+DD+DE E3+E4 0645+E1+E2 E7+E8|F1A1=EB EC EA 0647+E9 0648+ED+EE F3+F4 F2 064A+F1 0629+93 94 F0 0649+EF 0621 8B+8C 8A 0030 0031 0032 0033 0034 0035 0036 0037 0038 0039 0626+89 0624+85+86 FC FB F7 F8 F5 F6 F9 FA 064E 064F 0652 064B 064C 0651 0650 064D|F1E1=0646+E5+E6",
+T:"F20C=200C 200D 200E 200F|F202=FC08 FC0E FC12 FC42 FC4E|F210=FD88 _ FC3F FC40 FC41 FC6A FC70 FC91 FCB0 FD30 FCCD _ FC44 FC0A FC10 FC50|F220=0020 0021 0022 00AB 00BB 0025 00D7 00F7 0028 0029 002A 002B 060C 002D 002E 002F 0660 0661 0662 0663 0664 0665 0666 0667 0668 0669 003A 003B+061B 201C 003D 201D 003F+061F _ 0627+8D 8E 0623+83 84 0622+81 82 0625+87 88 91 92 90 0628+8F 97 98 96 062A+95 9B 9C 9A 062B+99 9F A0 9E 062C+9D A3 A4 005B A2 005D 002C+066B+066C 0640 062D+A1 A7 A8 A6 062E+A5 062F+A9 AA 0630+AB AC 0631+AD AE 0632+AF B0 B3 B4 B2 0633+B1 B7 B8 B6 0634+B5 BB BC BA 0635+B9 BF C0 FD3E BE FD3F 0636+BD C3 FC9C FC9D FC9E FCA1 FCA2 FCA3 FCC9 FCCA FCCB FCCE FCCF FCD0 _ FCD2 FCD3 FCDA FCDB FCDC FC6D FC73 FC94 FC86 FC9F FCA4 FCD5 FCDD FCA8 FCAA FCAC FCCC FCD1 FC32 _ C2 0637+C1 0638+C7 C8 C6 C5 CB CC CA 0639+C9 CF D0 CE 063A+CD D3 D4 D2 0641+D1 D7 D8 D6 0642+D5 DB DC DA 0643+D9 DF E0 DE 0644+DD E3 E4 E2 0645+E1 E7 E8 E6 0646+E5 EB EC EA 0647+E9 0648+ED EE F3 F4 F2 064A+F1 0629+93 94 F0 0649+EF 0621 8B 8C 8A 0626+89 0624+85 86 FB FC F7 F8 F5 F6 F9 FA 064E 064F 0652 064B 064C 0651 0650 064D FC60 FC61 _ FC5E FC62 C4"
+};
+function expand(s){const r=[];for(const run of s.split('|')){const i=run.indexOf('=');let p=parseInt(run.slice(0,i),16);for(const t of run.slice(i+1).split(' ')){if(t!=='_')r.push([p,t.split('+').map(x=>x.length===2?0xFE00+parseInt(x,16):parseInt(x,16))]);p++}}return r}
+const EN={S:expand(MAPS.S),T:expand(MAPS.T)};
+/* جدول الحروف في Presentation Forms-B: الأشكال بالترتيب isol,fina,init,medi */
+const LET=[['ء',1],['آ',2],['أ',2],['ؤ',2],['إ',2],['ئ',4],['ا',2],['ب',4],['ة',2],['ت',4],['ث',4],['ج',4],['ح',4],['خ',4],['د',2],['ذ',2],['ر',2],['ز',2],['س',4],['ش',4],['ص',4],['ض',4],['ط',4],['ظ',4],['ع',4],['غ',4],['ف',4],['ق',4],['ك',4],['ل',4],['م',4],['ن',4],['ه',4],['و',2],['ى',2],['ي',4]];
+const FORMS=[];{let c=0xFE80;for(const[ch,n]of LET){FORMS.push({base:ch.codePointAt(0),c0:c,n});c+=n}}
+
+/* ===== أدوات ثنائية ===== */
+const W=()=>{const a=[],o={u8(v){a.push(v&255);return o},u16(v){a.push((v>>8)&255,v&255);return o},u32(v){a.push((v>>>24)&255,(v>>>16)&255,(v>>>8)&255,v&255);return o},tag(s){for(const c of s)a.push(c.charCodeAt(0));return o},raw(u){for(const b of u)a.push(b);return o},get len(){return a.length},out(){return Uint8Array.from(a)}};return o};
+const dvOf=u=>new DataView(u.buffer,u.byteOffset,u.byteLength);
+const csum=u=>{let s=0;const n=Math.ceil(u.length/4)*4,b=new Uint8Array(n);b.set(u);const d=dvOf(b);for(let i=0;i<n;i+=4)s=(s+d.getUint32(i))>>>0;return s};
+const log2f=n=>Math.floor(Math.log2(n));
+
+function parseSfnt(u8,rep){
+  const dv=dvOf(u8),t4=String.fromCharCode(...u8.subarray(0,4));
+  if(t4==='ttcf')throw new Error('ملفات TTC (مجموعات الخطوط) غير مدعومة.');
+  const n=dv.getUint16(4),tabs={};
+  for(let i=0;i<n;i++){
+    const o=12+16*i,tag=String.fromCharCode(...u8.subarray(o,o+4)),off=dv.getUint32(o+8);let len=dv.getUint32(o+12);
+    if(off>=u8.length){rep.push('تحذير: الجدول '+tag+' خارج الملف وتم تجاهله');continue}
+    if(off+len>u8.length){rep.push('تحذير: قُصّ الجدول '+tag+' لأنه يتجاوز نهاية الملف');len=u8.length-off}
+    tabs[tag]=u8.slice(off,off+len);
+  }
+  return{ver:dv.getUint32(0),tabs};
+}
+function readCmap(t){
+  const dv=dvOf(t),n=dv.getUint16(2),subs=[];
+  for(let i=0;i<n;i++){const o=4+i*8;subs.push({p:dv.getUint16(o),e:dv.getUint16(o+2),off:dv.getUint32(o+4)})}
+  const rank=s=>s.p===3&&s.e===10?0:s.p===3&&s.e===1?1:s.p===0?2:s.p===3?3:4;
+  subs.sort((a,b)=>rank(a)-rank(b));
+  const map=new Map(),put=(c,g)=>{if(g&&!map.has(c))map.set(c,g)};
+  for(const s of subs){
+    const o=s.off;if(s.p===1&&s.e!==0)continue;
+    const f=dv.getUint16(o);
+    if(f===0)for(let i=0;i<256;i++)put(s.p===1?-1-i:i,dv.getUint8(o+6+i));
+    else if(f===4){
+      const sx=dv.getUint16(o+6),sc=sx/2,eO=o+14,sO=eO+sx+2,dO=sO+sx,rO=dO+sx;
+      for(let i=0;i<sc;i++){
+        const e=dv.getUint16(eO+i*2),st=dv.getUint16(sO+i*2),d=dv.getUint16(dO+i*2),ro=dv.getUint16(rO+i*2);
+        for(let c=st;c<=e&&c<0xFFFF;c++){
+          if(!ro)put(c,(c+d)&0xFFFF);else{const p=rO+i*2+ro+(c-st)*2;if(p+2<=t.length){const g=dv.getUint16(p);if(g)put(c,(g+d)&0xFFFF)}}
+        }
+      }
+    }else if(f===6){const fi=dv.getUint16(o+6),ct=dv.getUint16(o+8);for(let i=0;i<ct;i++)put(fi+i,dv.getUint16(o+10+i*2))}
+    else if(f===12){const ng=dv.getUint32(o+12);for(let i=0;i<ng;i++){const q=o+16+i*12,s0=dv.getUint32(q),e0=dv.getUint32(q+4),g0=dv.getUint32(q+8);for(let c=s0;c<=e0&&c<0xFFFF;c++)put(c,g0+c-s0)}}
+  }
+  for(const k of [...map.keys()])if(k<0)map.delete(k); // نتجاهل جدول ماك
+  return map;
+}
+function buildCmap(map){
+  const codes=[...map.keys()].filter(c=>c>=0&&c<0xFFFF).sort((a,b)=>a-b),segs=[];
+  for(const c of codes){const g=map.get(c),l=segs[segs.length-1];if(l&&c===l.e+1&&((g-c)&0xFFFF)===l.d)l.e=c;else segs.push({s:c,e:c,d:(g-c)&0xFFFF})}
+  segs.push({s:0xFFFF,e:0xFFFF,d:1});
+  const sc=segs.length,p2=2**log2f(sc),w=W();
+  w.u16(0).u16(2).u16(0).u16(3).u32(20).u16(3).u16(1).u32(20);
+  w.u16(4).u16(16+sc*8).u16(0).u16(sc*2).u16(p2*2).u16(log2f(p2)).u16(sc*2-p2*2);
+  segs.forEach(s=>w.u16(s.e));w.u16(0);segs.forEach(s=>w.u16(s.s));segs.forEach(s=>w.u16(s.d));segs.forEach(()=>w.u16(0));
+  return w.out();
+}
+
+/* ===== GSUB ===== */
+const cov=g=>{g=[...new Set(g)].sort((a,b)=>a-b);const w=W().u16(1).u16(g.length);g.forEach(x=>w.u16(x));return w.out()};
+function singleSub(pairs){
+  pairs.sort((a,b)=>a[0]-b[0]);const n=pairs.length,w=W().u16(2).u16(6+2*n).u16(n);
+  pairs.forEach(p=>w.u16(p[1]));return w.raw(cov(pairs.map(p=>p[0]))).out();
+}
+function ligSub(list){ // list: [first,[ [ligGlyph,[comps...]], ...]]
+  list.sort((a,b)=>a[0]-b[0]);const n=list.length;
+  const sets=list.map(([,ligs])=>{
+    const w=W().u16(ligs.length);let off=2+2*ligs.length;
+    ligs.forEach(l=>{w.u16(off);off+=4+2*l[1].length});
+    ligs.forEach(l=>{w.u16(l[0]).u16(l[1].length+1);l[1].forEach(c=>w.u16(c))});return w.out()});
+  const w=W().u16(1);let off=6+2*n;const sizes=sets.map(s=>s.length);
+  w.u16(off+sizes.reduce((a,b)=>a+b,0)).u16(n);
+  sets.forEach((s,i)=>{w.u16(off);off+=sizes[i]});sets.forEach(s=>w.raw(s));return w.raw(cov(list.map(l=>l[0]))).out();
+}
+function chain3(back,input,recs){
+  const nb=back.length,ni=input.length,hdr=2+2+2*nb+2+2*ni+2+2+4*recs.length;
+  const w=W().u16(3).u16(nb);let off=hdr;const cs=[...back,...input];
+  const offs=cs.map(c=>{const o=off;off+=c.length;return o});
+  back.forEach((_,i)=>w.u16(offs[i]));w.u16(ni);input.forEach((_,i)=>w.u16(offs[nb+i]));
+  w.u16(0).u16(recs.length);recs.forEach(r=>w.u16(r[0]).u16(r[1]));cs.forEach(c=>w.raw(c));return w.out();
+}
+function buildGSUB(map,rep){
+  const G=c=>map.get(c);
+  const pa={isol:[],fina:[],medi:[],init:[]},join=new Set();
+  for(const f of FORMS){
+    const b=G(f.base);if(b===undefined)continue;
+    const gi=G(f.c0);
+    for(const [k,i] of [['isol',0],['fina',1],['init',2],['medi',3]]){
+      if(i>=f.n)continue;const g=G(f.c0+i);
+      if(g===undefined)continue;
+      if(i>=2)join.add(g);
+      if(g!==b)pa[k].push([b,g]);
+    }
+  }
+  if(G(0x640)!==undefined)join.add(G(0x640));
+  const dedup=a=>{const m=new Map();a.forEach(p=>{if(!m.has(p[0]))m.set(p[0],p[1])});return[...m]};
+  const L=[],feat={};
+  const addL=(type,sub)=>{L.push({type,sub});return L.length-1};
+  for(const k of ['isol','fina','medi','init']){const p=dedup(pa[k]);if(p.length)feat[k]=[addL(1,singleSub(p))]}
+  // لام-ألف
+  const lam=FORMS.find(f=>f.base===0x644),lamInit=G(lam.c0+2)??G(0x644),lamMedi=G(lam.c0+3)??lamInit;
+  const types=[[0x627,0xFEFB,0xFEFC],[0x622,0xFEF5,0xFEF6],[0x623,0xFEF7,0xFEF8],[0x625,0xFEF9,0xFEFA]];
+  const iso=[],fin=[],afin=[];
+  if(lamInit!==undefined)for(const [a,li,lf] of types){
+    const f=FORMS.find(x=>x.base===a),ag=G(f.c0+1)??G(a);
+    if(ag===undefined)continue;afin.push(ag);
+    if(G(li)!==undefined)iso.push([G(li),[ag]]);
+    if(G(lf)!==undefined)fin.push([G(lf),[ag]]);
+  }
+  if(iso.length||fin.length){
+    const ids=[];
+    if(fin.length&&join.size){
+      const C=addL(4,ligSub([[lamMedi,fin]]));
+      ids.push(addL(6,chain3([cov([...join])],[cov([lamMedi]),cov(afin)],[[0,C]])));
+    }
+    if(iso.length)ids.push(addL(4,ligSub([[lamInit,iso]])));
+    feat.rlig=ids.filter(i=>L[i].type!==undefined&&!(L[i].type===4&&ids.indexOf(i)<0));
+    // C مرجعي فقط
+    feat.rlig=ids;
+  }
+  const names=Object.keys(feat).sort();
+  if(!names.length){rep.push('GSUB: لم يُعثر على أشكال كافية لإنشائه');return null}
+  // LookupList
+  const lw=W().u16(L.length);let off=2+2*L.length;const lt=L.map(l=>{const w=W().u16(l.type).u16(0).u16(1).u16(8).raw(l.sub);return w.out()});
+  lt.forEach(t=>{lw.u16(off);off+=t.length});lt.forEach(t=>lw.raw(t));const lookupList=lw.out();
+  // FeatureList
+  const fw=W().u16(names.length);off=2+6*names.length;const ft=names.map(n=>{const w=W().u16(0).u16(feat[n].length);feat[n].forEach(i=>w.u16(i));return w.out()});
+  names.forEach((n,i)=>{fw.tag(n.padEnd(4)).u16(off);off+=ft[i].length});ft.forEach(t=>fw.raw(t));const featList=fw.out();
+  // ScriptList
+  const ls=W().u16(0).u16(0xFFFF).u16(names.length);names.forEach((_,i)=>ls.u16(i));const lang=ls.out();
+  const script=W().u16(4).u16(0).raw(lang).out();
+  const sw=W().u16(2).tag('DFLT').u16(2+12).tag('arab').u16(2+12+script.length).raw(script).raw(script);const scriptList=sw.out();
+  const top=W().u32(0x00010000).u16(10).u16(10+scriptList.length).u16(10+scriptList.length+featList.length);
+  rep.push('GSUB: الميزات '+names.join(', ')+' ('+L.length+' lookups)');
+  return top.raw(scriptList).raw(featList).raw(lookupList).out();
+}
+
+
+/* ===== GDEF + GPOS (وضع الحركات) ===== */
+function glyphInfo(T,gid){
+  const lf=dvOf(T.head).getInt16(50),ng=dvOf(T.maxp).getUint16(4),lo=dvOf(T.loca);
+  if(gid>=ng)return null;
+  const off=lf?lo.getUint32(gid*4):lo.getUint16(gid*2)*2,end=lf?lo.getUint32(gid*4+4):lo.getUint16(gid*2+2)*2;
+  if(end<=off)return null;
+  const g=dvOf(T.glyf),nc=g.getInt16(off),r={xMin:g.getInt16(off+2),yMin:g.getInt16(off+4),xMax:g.getInt16(off+6),yMax:g.getInt16(off+8),pts:[]};
+  if(nc<=0)return r;
+  try{
+    let p=off+10;const ends=[];for(let i=0;i<nc;i++){ends.push(g.getUint16(p));p+=2}
+    const np=ends[nc-1]+1,il=g.getUint16(p);p+=2+il;
+    const fl=[];while(fl.length<np){const f=g.getUint8(p++);fl.push(f);if(f&8){let n=g.getUint8(p++);while(n--&&fl.length<np)fl.push(f)}}
+    const xs=[],ys=[];let v=0;
+    for(let i=0;i<np;i++){const f=fl[i];if(f&2){const d=g.getUint8(p++);v+=(f&16)?d:-d}else if(!(f&16)){v+=g.getInt16(p);p+=2}xs.push(v)}
+    v=0;for(let i=0;i<np;i++){const f=fl[i];if(f&4){const d=g.getUint8(p++);v+=(f&32)?d:-d}else if(!(f&32)){v+=g.getInt16(p);p+=2}ys.push(v)}
+    for(let i=0;i<np;i++)r.pts.push([xs[i],ys[i]]);
+  }catch(e){r.pts=[]}
+  return r;
+}
+function layoutTable(L,feat){
+  const names=Object.keys(feat).sort();
+  const lw=W().u16(L.length);let off=2+2*L.length;const lt=L.map(l=>W().u16(l.type).u16(0).u16(1).u16(8).raw(l.sub).out());
+  lt.forEach(t=>{lw.u16(off);off+=t.length});lt.forEach(t=>lw.raw(t));const lookupList=lw.out();
+  const fw=W().u16(names.length);off=2+6*names.length;const ft=names.map(n=>{const w=W().u16(0).u16(feat[n].length);feat[n].forEach(i=>w.u16(i));return w.out()});
+  names.forEach((n,i)=>{fw.tag(n.padEnd(4)).u16(off);off+=ft[i].length});ft.forEach(t=>fw.raw(t));const featList=fw.out();
+  const ls=W().u16(0).u16(0xFFFF).u16(names.length);names.forEach((_,i)=>ls.u16(i));const lang=ls.out();
+  const script=W().u16(4).u16(0).raw(lang).out();
+  const sw=W().u16(2).tag('DFLT').u16(14).tag('arab').u16(14+script.length).raw(script).raw(script);const scriptList=sw.out();
+  return W().u32(0x00010000).u16(10).u16(10+scriptList.length).u16(10+scriptList.length+featList.length).raw(scriptList).raw(featList).raw(lookupList).out();
+}
+const anc=(x,y)=>W().u16(1).u16(x&0xFFFF).u16(y&0xFFFF).out();
+function buildGPOS(T,map,rep){
+  const ABOVE=[0x64B,0x64C,0x64E,0x64F,0x651,0x652],BELOW=[0x64D,0x650],GAP=60;
+  const marks=new Map(); // gid -> {cls,info}
+  for(const [cps,cls] of [[ABOVE,0],[BELOW,1]])for(const c of cps){const g=map.get(c),i=g&&glyphInfo(T,g);if(i)marks.set(g,{cls,i})}
+  if(!marks.size)return null;
+  const ab=[...marks.values()].filter(m=>m.cls===0),bl=[...marks.values()].filter(m=>m.cls===1);
+  const CA=ab.length?Math.min(...ab.map(m=>m.i.yMin)):1200,CB=bl.length?Math.max(...bl.map(m=>m.i.yMax)):-200;
+  const mx=m=>Math.round((m.i.xMin+m.i.xMax)/2);
+  // علامات
+  const mg=[...marks.keys()].sort((a,b)=>a-b);
+  const ma=W().u16(mg.length);let o=2+4*mg.length;mg.forEach(g=>{ma.u16(marks.get(g).cls).u16(o);o+=6});
+  mg.forEach(g=>{const m=marks.get(g);ma.raw(anc(mx(m),m.cls===0?CA:CB))});
+  // قواعد
+  const bases=[];const seen=new Set();
+  for(const g of map.values()){if(seen.has(g)||marks.has(g))continue;seen.add(g);const i=glyphInfo(T,g);if(i&&i.xMax>i.xMin&&i.yMax>i.yMin)bases.push([g,i])}
+  bases.sort((a,b)=>a[0]-b[0]);
+  const band=(pts,top,ymin,ymax)=>{const h=ymax-ymin,sel=pts.filter(p=>top?p[1]>=ymax-.2*h:p[1]<=ymin+.2*h);return sel.length?sel.reduce((s,p)=>s+p[0],0)/sel.length:null};
+  const ba=W().u16(bases.length);o=2+4*bases.length;
+  bases.forEach(()=>{ba.u16(o).u16(o+6);o+=12});
+  for(const [,i] of bases){
+    const cx=(i.xMin+i.xMax)/2,w=i.xMax-i.xMin;
+    const xa=Math.round(band(i.pts,true,i.yMin,i.yMax)??cx);
+    let xb=band(i.pts,false,i.yMin,i.yMax)??cx;xb=Math.round(Math.min(Math.max(xb,i.xMin+.25*w),i.xMax-.25*w));
+    ba.raw(anc(xa,Math.max(i.yMax+GAP,CA))).raw(anc(xb,Math.min(i.yMin-GAP,CB)));
+  }
+  const cm=cov(mg),cb=cov(bases.map(b=>b[0])),mab=ma.out(),bab=ba.out();
+  const h=12,sub=W().u16(1).u16(h).u16(h+cm.length).u16(2).u16(h+cm.length+cb.length).u16(h+cm.length+cb.length+mab.length).raw(cm).raw(cb).raw(mab).raw(bab).out();
+  const L=[{type:4,sub}],feat={mark:[0]};
+  // علامة فوق علامة
+  const ag=ab.length?mg.filter(g=>marks.get(g).cls===0):[];
+  if(ag.length){
+    const m1=W().u16(ag.length);let q=2+4*ag.length;ag.forEach(()=>{m1.u16(0).u16(q);q+=6});ag.forEach(g=>{const m=marks.get(g);m1.raw(anc(mx(m),m.i.yMin))});
+    const m2=W().u16(ag.length);q=2+2*ag.length;ag.forEach(()=>{m2.u16(q);q+=6});ag.forEach(g=>{const m=marks.get(g);m2.raw(anc(mx(m),m.i.yMax+GAP))});
+    const c=cov(ag),a1=m1.out(),a2=m2.out(),h2=12;
+    L.push({type:6,sub:W().u16(1).u16(h2).u16(h2+c.length).u16(1).u16(h2+2*c.length).u16(h2+2*c.length+a1.length).raw(c).raw(c).raw(a1).raw(a2).out()});
+    feat.mkmk=[1];
+  }
+  // GDEF
+  const ng=dvOf(T.maxp).getUint16(4),ligs=new Set([0xFEF5,0xFEF6,0xFEF7,0xFEF8,0xFEF9,0xFEFA,0xFEFB,0xFEFC].map(c=>map.get(c)).filter(x=>x));
+  const rr=[];for(let g=1;g<ng;g++){const c=marks.has(g)?3:ligs.has(g)?2:1,l=rr[rr.length-1];if(l&&l[2]===c&&l[1]===g-1)l[1]=g;else rr.push([g,g,c])}
+  const cd=W().u16(2).u16(rr.length);rr.forEach(r=>cd.u16(r[0]).u16(r[1]).u16(r[2]));
+  const gdef=W().u32(0x00010000).u16(12).u16(0).u16(0).u16(0).raw(cd.out()).out();
+  rep.push('GPOS/GDEF: '+marks.size+' علامة و'+bases.length+' حرفًا أساسيًا (mark, mkmk)');
+  return{gpos:layoutTable(L,feat),gdef,zero:[...marks.keys()]};
+}
+
+/* ===== جدول name ===== */
+const u16be=s=>{const w=W();for(let i=0;i<s.length;i++)w.u16(s.charCodeAt(i));return w.out()};
+function fixName(t,fname,rep){
+  const recs=[];
+  if(t&&t.length>=6){const dv=dvOf(t),n=dv.getUint16(2),so=dv.getUint16(4);
+    for(let i=0;i<n;i++){const o=6+12*i;if(o+12>t.length)break;const r={p:dv.getUint16(o),e:dv.getUint16(o+2),l:dv.getUint16(o+4),id:dv.getUint16(o+6)},len=dv.getUint16(o+8),off=dv.getUint16(o+10);
+      if(so+off+len<=t.length){r.b=t.slice(so+off,so+off+len);recs.push(r)}}}
+  for(const r of recs)if(r.p===3&&r.e===0){const dup=recs.some(x=>x!==r&&x.p===3&&x.e===1&&x.l===r.l&&x.id===r.id);if(!dup)r.e=1}
+  for(let i=recs.length-1;i>=0;i--)if(recs[i].p===3&&recs[i].e===0)recs.splice(i,1);
+  const win=id=>recs.find(r=>r.p===3&&r.l===0x409&&r.id===id);
+  let added=0;
+  for(const r of [...recs])if(r.p===1&&r.e===0&&r.l===0&&!win(r.id)){recs.push({p:3,e:1,l:0x409,id:r.id,b:u16be(new TextDecoder('macintosh').decode(r.b))});added++}
+  const get=id=>{const r=win(id);return r?new TextDecoder('utf-16be').decode(r.b):null};
+  const fam=get(1)||get(16)||get(4)||fname.replace(/\.\w+$/,'').replace(/-unicode$/i,'')||'Font',sub=get(2)||'Regular';
+  for(const [id,v] of [[1,fam],[2,sub],[3,fam+' '+sub],[4,sub==='Regular'?fam:fam+' '+sub],[5,'Version 1.000'],[6,fam.replace(/[^A-Za-z0-9]/g,'')||'Font']])
+    if(!win(id)){recs.push({p:3,e:1,l:0x409,id,b:u16be(v)});added++}
+  if(added)rep.push('name: أُضيفت '+added+' سجلات لويندوز (الاسم الأصلي لم يتغير: '+fam+')');
+  recs.sort((a,b)=>a.p-b.p||a.e-b.e||a.l-b.l||a.id-b.id);
+  const w=W().u16(0).u16(recs.length).u16(6+12*recs.length);let off=0;
+  recs.forEach(r=>{w.u16(r.p).u16(r.e).u16(r.l).u16(r.id).u16(r.b.length).u16(off);off+=r.b.length});recs.forEach(r=>w.raw(r.b));
+  return w.out();
+}
+function buildOS2(T,map,old){
+  const head=dvOf(T.head),hhea=dvOf(T.hhea),hm=dvOf(T.hmtx),nh=hhea.getUint16(34);
+  let sum=0,cnt=0;for(let i=0;i<nh&&i*4+2<=T.hmtx.length;i++){const a=hm.getUint16(i*4);if(a){sum+=a;cnt++}}
+  const keys=[...map.keys()].filter(c=>c<0xFFFF),w=W(),upm=head.getUint16(18);
+  const od=old&&old.length>=10?dvOf(old):null,clamp=(v,a,b,d)=>v>=a&&v<=b?v:d;
+  const wt=od?clamp(od.getUint16(4),100,900,400):400,wd=od?clamp(od.getUint16(6),1,9,5):5,ft=od&&[0,2,4,8].includes(od.getUint16(8))?od.getUint16(8):0;
+  w.u16(4).u16(od?od.getInt16(2):(cnt?Math.round(sum/cnt):upm>>1)).u16(wt).u16(wd).u16(ft);
+  w.u16(upm*.65|0).u16(upm*.14|0).u16(0).u16(upm*.14|0).u16(upm*.65|0).u16(upm*.14|0).u16(0).u16(upm*.48|0).u16(upm*.05|0).u16(upm*.26|0).u16(0);
+  for(let i=0;i<10;i++)w.u8(0);
+  const ur=[0,0,0,0];if(map.has(0x41))ur[0]|=1;ur[0]|=1<<13;ur[1]|=(1<<30);ur[2]|=(1<<3);
+  ur.forEach(v=>w.u32(v>>>0));w.tag('NONE').u16(0x40).u16(Math.min(...keys,0xFFFF)).u16(Math.max(...keys,0));
+  w.u16(hhea.getInt16(4)).u16(hhea.getInt16(6)).u16(hhea.getInt16(8)).u16(Math.max(head.getInt16(42),hhea.getInt16(4),0)).u16(Math.max(Math.abs(head.getInt16(38)),Math.abs(hhea.getInt16(6))));
+  w.u32(((1<<6)|1)>>>0).u32(0).u16(0).u16(0).u16(0).u16(32).u16(4);
+  return w.out();
+}
+function patchOS2(d){
+  if(d.length<58)return;const v=dvOf(d);
+  v.setUint32(42,(v.getUint32(42)|(1<<13))>>>0);v.setUint32(46,(v.getUint32(46)|(1<<30))>>>0);v.setUint32(50,(v.getUint32(50)|(1<<3))>>>0);
+  if(d.length>=86&&v.getUint16(0)>=1)v.setUint32(78,(((v.getUint32(78)|(1<<6))&~(1<<31)))>>>0);
+}
+function buildPost3(){return W().u32(0x00030000).u32(0).u16(0xFF9C).u16(50).u32(0).u32(0).u32(0).u32(0).u32(0).out()}
+
+/* ===== التحويل الرئيسي ===== */
+function convertFont(src,o,fname){
+  const rep=[],sf=parseSfnt(src,rep),T=sf.tabs;
+  rep.push('الجداول الأصلية: '+Object.keys(T).join(' '));
+  for(const t of ['head','hhea','maxp','hmtx','cmap'])if(!T[t])throw new Error('الجدول الإلزامي مفقود في الخط: '+t);
+  if(T.glyf&&!T.loca)throw new Error('جدول loca مفقود');
+  if(dvOf(T.head).getUint32(12)!==0x5F0F3CF5)throw new Error('جدول head تالف (magic غير صحيح)');
+  const map=readCmap(T.cmap),orig=new Map(map);
+  const hit=k=>EN[k].filter(([p])=>orig.has(p)).length;
+  const hs=hit('S'),ht=hit('T');
+  const keys=o.enc==='auto'?[hs>=ht?'S':'T']:o.enc==='both'?['S','T']:[o.enc];
+  let seen=0,added=0;
+  for(const k of keys)for(const [p,us] of EN[k]){const g=orig.get(p);if(g===undefined)continue;seen++;for(const u of us)if(u<0xFFFF&&!map.has(u)){map.set(u,g);added++}}
+  rep.push('الترميز المستخدم: '+keys.map(k=>k==='S'?'Simplified':'Traditional').join(' + ')+' (تطابق S='+hs+' ، T='+ht+')');
+  if(!seen)throw new Error('لم يُعثر على أي رمز PUA مطابق. ربما يستخدم هذا الخط ترميزًا آخر (جرّب «الاثنان معًا» أو أرسل لي قائمة رموزه).');
+  for(const f of FORMS){if(f.base&&!map.has(f.base)&&map.has(f.c0)){map.set(f.base,map.get(f.c0));added++}}
+  rep.push('رموز PUA مطابقة: '+seen+' ، رموز يونيكود مضافة: '+added);
+  if(!o.keep)for(const c of [...map.keys()])if(c>=0xE000&&c<=0xF8FF&&orig.has(c))map.delete(c);
+  if(o.gsub&&!T.GSUB){const g=buildGSUB(map,rep);if(g)T.GSUB=g}else if(T.GSUB)rep.push('GSUB: الخط يملك GSUB أصلًا وتُرك كما هو');
+  if(o.gpos&&!T.GPOS&&T.glyf&&T.loca){const r=buildGPOS(T,map,rep);if(r){T.GPOS=r.gpos;if(!T.GDEF)T.GDEF=r.gdef;const hm=T.hmtx.slice(),dh=dvOf(hm),nh=dvOf(T.hhea).getUint16(34);for(const g of r.zero)if(g<nh)dh.setUint16(g*4,0);T.hmtx=hm}}
+  T.cmap=buildCmap(map);
+  if(o.fix){
+    T.name=fixName(T.name,fname,rep);
+    if(!T['OS/2']){T['OS/2']=buildOS2(T,map,null);rep.push('OS/2: أُنشئ جدول جديد (كان مفقودًا)')}else if(o.rebuild){T['OS/2']=buildOS2(T,map,T['OS/2']);rep.push('OS/2: أُعيد بناؤه بالصيغة 4 مع تنظيف الحقول')}else if(o.os2){patchOS2(T['OS/2'])}
+    if(o.gasp){T.gasp=W().u16(1).u16(1).u16(0xFFFF).u16(0x000A).out();rep.push('gasp: أُضيف لتعطيل التحسين الشبكي')}
+    const ng=dvOf(T.maxp).getUint16(4);
+    if(!T.post){T.post=buildPost3();rep.push('post: أُنشئ جدول جديد (كان مفقودًا)')}
+    else if(dvOf(T.post).getUint32(0)===0x20000&&(T.post.length<34||dvOf(T.post).getUint16(32)!==ng)){T.post=buildPost3();rep.push('post: أسماء الرموز غير متوافقة مع maxp فاستُبدل بالصيغة 3')}
+    const hh=dvOf(T.hhea);let nh=hh.getUint16(34);
+    if(nh>ng){hh.setUint16(34,ng);nh=ng;rep.push('hhea: صُحّح numberOfHMetrics')}
+    const need=4*nh+2*Math.max(ng-nh,0);
+    if(T.hmtx.length<need){const n=new Uint8Array(need);n.set(T.hmtx);T.hmtx=n;rep.push('hmtx: أُكمل طول الجدول')}
+    delete T.DSIG;
+    if(o.drop)for(const t of ['hdmx','LTSH','VDMX','kern','PCLT'])if(T[t]){delete T[t];rep.push('حُذف الجدول الاختياري '+t)}
+  }
+  const ch=o.ch||[],has=k=>ch.includes(k);
+  if(ch.length&&T['OS/2']&&T['OS/2'].length>=86){const os=T['OS/2'].slice(),v=dvOf(os),hd=dvOf(T.head);
+    if(has('fs'))v.setUint16(8,0);
+    if(has('pan'))os.set([2,0,5,3,0,0,0,0,0,0],32);
+    if(has('lat'))v.setUint32(42,(v.getUint32(42)|1)>>>0);
+    if(has('b63'))v.setUint32(46,(v.getUint32(46)|(1<<31))>>>0);
+    if(has('sel'))v.setUint16(62,0xC0);
+    if(has('win')){v.setUint16(74,Math.max(hd.getInt16(42),0));v.setUint16(76,Math.abs(hd.getInt16(38)))}
+    T['OS/2']=os;rep.push('تعديلات اختبار: '+ch.join(' + '))}
+  if(T.head){const h=T.head.slice(),hv=dvOf(h);hv.setUint32(8,0);if(has('flg'))hv.setUint16(16,hv.getUint16(16)&3);T.head=h}
+  const tags=Object.keys(T).sort(),n=tags.length,sr=16*2**log2f(n);
+  let pos=12+16*n;const offs={};tags.forEach(t=>{offs[t]=pos;pos+=Math.ceil(T[t].length/4)*4});
+  const out=new Uint8Array(pos),ov=dvOf(out);
+  ov.setUint32(0,sf.ver===0x74727565?0x00010000:sf.ver);ov.setUint16(4,n);ov.setUint16(6,sr);ov.setUint16(8,log2f(n));ov.setUint16(10,n*16-sr);
+  tags.forEach((t,i)=>{const p=12+16*i;for(let k=0;k<4;k++)out[p+k]=t.charCodeAt(k);ov.setUint32(p+4,csum(T[t]));ov.setUint32(p+8,offs[t]);ov.setUint32(p+12,T[t].length);out.set(T[t],offs[t])});
+  if(offs.head)ov.setUint32(offs.head+8,(0xB1B0AFBA-csum(out))>>>0);
+  rep.push('الجداول الناتجة: '+tags.join(' '));
+  return{out,rep};
+}
+
+
+
+
+const $=i=>document.getElementById(i),log=t=>$('log').textContent=t;
+const BASE={gsub:true,gpos:true,fix:true,rebuild:true,drop:true};
+const VARS=[['A','خط يونيكود جاهز (يعمل في ويندوز وMPC-HC)','إصلاح كامل: cmap وGSUB وGPOS/GDEF وOS/2 وname. للاستخدام في ويندوز والبرامج عمومًا.',BASE]];
+$('go').onclick=async()=>{
+  try{
+    const f=$('ff').files[0];if(!f)return log('ارفع الخط أولًا.');
+    const src=new Uint8Array(await f.arrayBuffer());$('vars').innerHTML='';
+    let msg='';
+    for(const [k,t,d,o] of VARS){
+      const r=convertFont(src,{enc:$('mode').value,keep:true,...o},f.name);
+      if(k==='A')msg=r.rep.join('\n');
+      const div=document.createElement('div');div.className='v';
+      div.innerHTML='<div><b>'+t+'</b><span>'+d+'</span></div>';
+      const b=document.createElement('button');b.textContent='تنزيل';
+      b.onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([r.out],{type:'font/ttf'}));a.download=f.name.replace(/\.\w+$/,'')+'-'+k+'.ttf';a.click()};
+      div.appendChild(b);$('vars').appendChild(div);
+    }
+    log(msg+'\n\nملاحظة: تُحفظ الملفات بامتداد صغير .ttf دائمًا، لأن بعض البرامج (ومنها MPC-HC على الأرجح) لا تقرأ الامتداد .TTF الكبير.');
+  }catch(e){log('خطأ: '+e.message)}
+};
+</script>
+</body>
+</html>
